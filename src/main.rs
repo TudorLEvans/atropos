@@ -1,4 +1,4 @@
-use cpal::{SampleFormat};
+use cpal::{SampleFormat, StreamConfig};
 use dasp_sample::Sample;
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 
@@ -32,25 +32,26 @@ fn main() {
     // define format of sample
     let sample_format = supported_config.sample_format();
 
-    let config = supported_config.into();
+    let config: StreamConfig = supported_config.into();
+
+    let frequency = 440; // classic 440
 
     // return stream based on SampleFormat match
     let stream = match sample_format {
-        SampleFormat::F32 => device.build_output_stream(&config, write_square, err_fn, None),
+        SampleFormat::F32 => device.build_output_stream(&config, 
+            move |data: &mut [f32], _: &cpal::OutputCallbackInfo| {
+                let mut counter = 0;
+                for sample in data.iter_mut() {
+                    let s = if (2 * frequency * counter / config.sample_rate.0) % 2 == 0 { &1.0 } else { &0.0 };
+                    counter = counter + 1;
+                    *sample = s.to_sample::<f32>()
+                }
+            }, 
+            err_fn, None),
         sample_format => panic!("Unsupported sample format '{sample_format}'")
     }.unwrap();
 
     stream.play().unwrap();
 
     std::thread::sleep(std::time::Duration::from_secs(10));
-}
-
-
-fn write_square(data: &mut [f32], _: &cpal::OutputCallbackInfo) {
-    let mut counter = 0;
-    for sample in data.iter_mut() {
-        let s = if (counter / 20) % 2 == 0 { &1.0 } else { &0.0 };
-        counter = counter + 1;
-        *sample = s.to_sample::<f32>()
-    }
 }
