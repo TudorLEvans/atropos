@@ -7,7 +7,7 @@ use std::error::Error;
 use std::boxed::Box;
 use std::sync::Arc;
 use std::{thread};
-
+use std::f32::consts::PI;
 
 struct Metronome {
     bar_length: u8,
@@ -54,22 +54,20 @@ fn main() {
         println!("exited thread")
     });
 
-    let frequency = 50; // classic 440Hz (musical A)
+    let frequency = 200; // classic 440Hz (musical A)
     let tempo = 80;
 
     // calculate the ring buffer input for the sound wave
     // only write when the buffer is not full
     let mut age = 0;
+    let mut s: f32 = 0.0;
     loop {
         if prod.is_full() {
             thread::sleep_ms(1);
         } else {
             age = age + 1;
-            if age < sample_rate / 10 && (2 * frequency * age / sample_rate) % 2 == 0 {
-                prod.push(1.0);
-            } else { 
-                prod.push(0.0);
-            }
+            s = if age < sample_rate / 6 { (2.0 * PI * frequency as f32 * age as f32 / sample_rate as f32).sin() * ( ( sample_rate as f32 - 6.0 * age as f32 ) / sample_rate as f32)} else {0.0};
+            prod.push(s);
             if age >= ( sample_rate * 60 / tempo ) {
                 age = 0;
             }
