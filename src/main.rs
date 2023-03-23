@@ -8,6 +8,7 @@ use std::boxed::Box;
 use std::sync::Arc;
 use std::{thread};
 use std::f32::consts::PI;
+use std::collections::VecDeque;
 
 struct Metronome {
     bar_length: u8,
@@ -15,6 +16,28 @@ struct Metronome {
     tempo: i16,
     use_bell: bool,
     use_beat: bool
+}
+
+struct Synth {
+    frequency: u16,
+    ttl_ms: u16,
+    tick: u32,
+}
+
+fn build_synth() -> Synth {
+    Synth {
+        frequency: 440,
+        ttl_ms: 100,
+        tick: 0
+    }
+}
+
+impl Synth {
+    fn iterate_wave<T>(&mut self, sample_rate: i32) -> T {
+        s = (2.0 * PI * frequency as f32 * self.tick as f32 / sample_rate as f32).sin() * ( ( sample_rate as f32 - 8.0 * self.tick as f32 ) / sample_rate as f32);
+        self.tick += 1;
+        s
+    }
 }
 
 fn main() {
@@ -48,28 +71,40 @@ fn main() {
     let (mut prod, mut cons) = rb.split();
 
     // calls the thread that writes the ring buffer data to the device
-    
     thread::spawn(|| {
         write_to_stream::<f32>(device, cons);
-        println!("exited thread")
+        println!("exited thread");
     });
 
-    let frequency = 200; // classic 440Hz (musical A)
     let tempo = 80;
+    let bar_length = 4;
+
+    // create a (non-threadable) buffer for storing the FIFO list of notes currently playing
+    let notes = VecDeque::new<Synth>();
 
     // calculate the ring buffer input for the sound wave
     // only write when the buffer is not full
-    let mut age = 0;
     let mut s: f32 = 0.0;
+    let mut age = 0;
     loop {
         if prod.is_full() {
             thread::sleep_ms(1);
         } else {
-            age = age + 1;
-            s = if age < sample_rate / 6 { (2.0 * PI * frequency as f32 * age as f32 / sample_rate as f32).sin() * ( ( sample_rate as f32 - 6.0 * age as f32 ) / sample_rate as f32)} else {0.0};
-            prod.push(s);
-            if age >= ( sample_rate * 60 / tempo ) {
-                age = 0;
+            if  age % ( sample_rate * 60 / tempo) == 0 {
+                notes.push_back(build_synth());
+            };
+            match notes.front() {
+                Some(x) => {
+                    if ( 1000 * x.tick / sample_rate >= x.ttl ) {
+                        notes.pop_front();
+                    };
+                },
+                None => (),
+            }
+            for note in notes.iter_mut() {
+                s = note.iterate_wave<f32>(note, sample_rate);
+                prod.push(s);
+                age = age + 1;
             }
         }
     }
