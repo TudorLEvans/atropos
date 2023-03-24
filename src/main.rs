@@ -1,5 +1,5 @@
 use cpal::{SampleFormat, StreamConfig, Device};
-// use dasp_sample::Sample;
+use dasp_sample::Sample;
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use ringbuf::{HeapRb};
 use ringbuf::consumer::{Consumer};
@@ -8,6 +8,8 @@ use std::boxed::Box;
 use std::sync::Arc;
 use std::{thread};
 use std::f32::consts::PI;
+use std::collections::VecDeque;
+use std::time::{Duration};
 
 struct Metronome {
     bar_length: u8,
@@ -15,6 +17,28 @@ struct Metronome {
     tempo: i16,
     use_bell: bool,
     use_beat: bool
+}
+
+struct Synth {
+    frequency: u32,
+    release: u32,
+    tick: u32,
+}
+
+fn build_synth() -> Synth {
+    Synth {
+        frequency: 440,
+        release: 100,
+        tick: 0
+    }
+}
+
+impl Synth {
+    fn iterate_wave<F32>(&mut self, sample_rate: u32) -> f32 {
+        let s = (2.0 * PI * self.frequency as f32 * self.tick as f32 / sample_rate as f32).sin() * ( ( sample_rate as f32 - 8.0 * self.tick as f32 ) / sample_rate as f32);
+        self.tick += 1;
+        s
+    }
 }
 
 fn main() {
@@ -42,34 +66,59 @@ fn main() {
     // create a ring buffer to hold calculated audio data
     let rb = match sample_format {
         SampleFormat::F32 => HeapRb::<f32>::new(16384),
-        default => panic!("Unsupported sample format '{sample_format}'")
+        sample_format => panic!("Unsupported sample format '{sample_format}'")
     };
 
-    let (mut prod, mut cons) = rb.split();
+    let (mut prod, cons) = rb.split();
 
     // calls the thread that writes the ring buffer data to the device
-    
     thread::spawn(|| {
-        write_to_stream::<f32>(device, cons);
-        println!("exited thread")
+        write_to_stream::<f32>(device, cons).unwrap();
+        println!("exited thread");
     });
 
-    let frequency = 200; // classic 440Hz (musical A)
-    let tempo = 80;
+    let tempo = 120;
+    let bar_length = 4;
+
+    // create a (non-threadable) buffer for storing the FIFO list of notes currently playing
+    let mut notes = VecDeque::new();
 
     // calculate the ring buffer input for the sound wave
     // only write when the buffer is not full
+    let mut s: f32;
     let mut age = 0;
-    let mut s: f32 = 0.0;
     loop {
         if prod.is_full() {
-            thread::sleep_ms(1);
+            thread::sleep(Duration::from_millis(1));
         } else {
+            s = 0.0;
+            if age % ( sample_rate * 60 / tempo) == 0 {
+                notes.push_back(build_synth());
+            };
+            match notes.front() {
+                Some(x) => {
+                    if 1000 * x.tick / sample_rate >= x.release {
+                        notes.pop_front();
+                    };
+                },
+                None => (),
+            }
+            for note in notes.iter_mut() {
+                s = s + note.iterate_wave::<f32>(sample_rate);
+            }
+            // dangerous - FIX!
+            if notes.len() != 0 {
+                s = s / notes.len() as f32;
+            } else {
+                s = 0.0;
+            }
+
+            prod.push(s).unwrap();
             age = age + 1;
-            s = if age < sample_rate / 6 { (2.0 * PI * frequency as f32 * age as f32 / sample_rate as f32).sin() * ( ( sample_rate as f32 - 6.0 * age as f32 ) / sample_rate as f32)} else {0.0};
-            prod.push(s);
-            if age >= ( sample_rate * 60 / tempo ) {
-                age = 0;
+
+            // reset age after each bar completes
+            if age == sample_rate * bar_length * (60 / tempo) {
+                age = 0
             }
         }
     }
@@ -91,21 +140,23 @@ fn write_to_stream<T: cpal::SizedSample + Send + std::fmt::Display + 'static>(de
     let err_fn = |err| eprintln!("an error occurred on the output audio stream: {}", err);
 
     let config: StreamConfig = supported_config.into();
-    let sample_rate = config.sample_rate.0;
     let channels = config.channels as usize;
 
     // return stream based on SampleFormat match
     let stream = device.build_output_stream(&config, 
-        move |data: &mut [T], _: &cpal::OutputCallbackInfo| {            
+        move |data: &mut [T], _: &cpal::OutputCallbackInfo| {
+            // closure code for reading from the ring buffer
+            // get the volume, iterate through channels, write to output
             for channel in data.chunks_mut(channels) {
-                // closure code for reading from the ring buffer
-                for sample in channel.iter_mut() {
-                    match cons.pop() {
-                        Some(x) => {
-                            *sample = x.to_sample::<T>();
-                        },
-                        None => println!("Empty buffer")
-                    }
+                let mut samp: T;
+                match cons.pop() {
+                    Some(x) => {
+                        samp = x;
+                        for sample in channel.iter_mut() {
+                            *sample = samp.to_sample::<T>();
+                        }
+                    },
+                    None => {}
                 }
             }
         },
@@ -113,6 +164,6 @@ fn write_to_stream<T: cpal::SizedSample + Send + std::fmt::Display + 'static>(de
 
     // play the stream
     stream.play().unwrap();
-    thread::sleep_ms(20000);
+    thread::sleep(Duration::from_millis(60000));
     Ok(true)
 }
