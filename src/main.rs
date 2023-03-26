@@ -6,7 +6,7 @@ use cpal::{SampleFormat, StreamConfig};
 use cpal::traits::{DeviceTrait, HostTrait};
 use ringbuf::{HeapRb};
 
-mod oscillator;
+mod synthesis;
 mod player;
 
 
@@ -34,7 +34,7 @@ fn main() {
 
     // create a ring buffer to hold calculated audio data
     let rb = match sample_format {
-        SampleFormat::F32 => HeapRb::<f32>::new(16384),
+        SampleFormat::F32 => HeapRb::<f32>::new(8192),
         sample_format => panic!("Unsupported sample format '{sample_format}'")
     };
 
@@ -62,7 +62,7 @@ fn main() {
         } else {
             s = 0.0;
             if age % ( sample_rate * 60 / tempo) == 0 {
-                notes.push_back(oscillator::build_oscillator());
+                notes.push_back(synthesis::oscillator::build_oscillator());
             };
             match notes.front() {
                 Some(x) => {

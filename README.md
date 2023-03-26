@@ -4,8 +4,10 @@ Atropos, one of the Greek fates, was responsible for bringing mortals to their e
 
 Atropos is built on top of cpal, which offers fairly low level access to sound hardware.
 
-The project is at a very early stage, and currently only supports generating a single sound - a square wave - produced with the command:
+The tool can be run with the command:
 
 ```
 cargo run
 ```
+
+This will run the metronome for one minute with hardcoded configuration.

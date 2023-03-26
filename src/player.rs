@@ -1,5 +1,5 @@
-use std::fs::OpenOptions;
-use std::io::Write;
+// use std::fs::OpenOptions;
+// use std::io::Write;
 use std::error::Error;
 use std::boxed::Box;
 use std::sync::Arc;
@@ -21,13 +21,7 @@ pub fn write_to_stream<T: cpal::SizedSample + Send + std::fmt::Display + 'static
     let supported_config = supported_configs_range.next()
         .expect("no supported config?!")
         .with_max_sample_rate();
-
-    let mut data_file = OpenOptions::new()
-        .append(true)
-        .open("data.txt")
-        .expect("cannot open file");
     
-
     // define error closure
     let err_fn = |err| eprintln!("an error occurred on the output audio stream: {}", err);
 
@@ -40,15 +34,10 @@ pub fn write_to_stream<T: cpal::SizedSample + Send + std::fmt::Display + 'static
             // closure code for reading from the ring buffer
             // get the volume, iterate through channels, write to output
             for channel in data.chunks_mut(channels) {
-                let samp: T;
                 match cons.pop() {
                     Some(x) => {
-                        data_file
-                            .write(x.to_string().as_bytes())
-                            .expect("write failed");
-                        samp = x;
                         for sample in channel.iter_mut() {
-                            *sample = samp.to_sample::<T>();
+                            *sample = x.to_sample::<T>();
                         }
                     },
                     None => {}
