@@ -8,6 +8,7 @@ use ringbuf::{HeapRb};
 
 mod synthesis;
 mod player;
+mod cli;
 
 
 fn main() {
@@ -46,8 +47,13 @@ fn main() {
         println!("exited thread");
     });
 
-    let tempo = 80;
-    let bar_length = 4;
+    let met = cli::Metronome {
+        bar_length: 4,
+        sub_divisions: 2,
+        tempo: 100,
+        use_bell: true,
+        use_sub: true
+    };
 
     // create a (non-threadable) buffer for storing the FIFO list of notes currently playing
     let mut notes = VecDeque::new();
@@ -55,15 +61,26 @@ fn main() {
     // calculate the ring buffer input for the sound wave
     // only write when the buffer is not full
     let mut s: f32;
-    let mut age = 0;
+    let mut age: u32 = 0;
     loop {
         if prod.is_full() {
             thread::sleep(Duration::from_millis(1));
         } else {
             s = 0.0;
-            if age % ( sample_rate * 60 / tempo) == 0 {
-                notes.push_back(synthesis::oscillator::build_oscillator());
+
+            // check which type of note to play
+
+            // play bell if at start of bar and enabled
+            if met.use_bell && age % ( met.bar_length * sample_rate * 60 / ( met.tempo )) == 0 {
+                notes.push_back(synthesis::oscillator::build_oscillator(700));
+            // play note if on the beat and it's not a bell
+            } else if age % ( sample_rate * 60 / met.tempo) == 0 {
+                notes.push_back(synthesis::oscillator::build_oscillator(600));
+            // play subdivision sound if on subdivision and not on beat and sound enabled
+            } else if met.use_sub && age % ( sample_rate * 60 / ( met.tempo * met.sub_divisions )) == 0 {
+                notes.push_back(synthesis::oscillator::build_oscillator(440));
             };
+
             match notes.front() {
                 Some(x) => {
                     if x.is_expired(sample_rate) {
@@ -86,7 +103,7 @@ fn main() {
             age = age + 1;
 
             // reset age after each bar completes
-            if age == sample_rate * bar_length * (60 / tempo) {
+            if age == sample_rate * met.bar_length * (60 / met.tempo) {
                 age = 0
             }
         }

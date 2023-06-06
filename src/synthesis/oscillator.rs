@@ -7,18 +7,18 @@ pub struct Oscillator {
     envelope: envelope::Envelope
 }
 
-pub fn build_oscillator() -> Oscillator {
+pub fn build_oscillator(frequency: u32) -> Oscillator {
     let envelope = envelope::Envelope {
-        attack: 40,
-        peak_level: 1.0,
-        decay: 40,
+        attack: 60,
+        peak_level: 0.5,
+        decay: 100,
         sustain_level: 0.1,
-        sustain: 100,
-        release: 20,
+        sustain: 200,
+        release: 40,
         ttl_ms: 160
     };
     Oscillator {
-        frequency: 440,
+        frequency,
         tick: 0,
         envelope
     }

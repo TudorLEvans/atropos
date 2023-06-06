@@ -1,10 +1,6 @@
-// use std::fs::OpenOptions;
-// use std::io::Write;
 use std::error::Error;
 use std::boxed::Box;
 use std::sync::Arc;
-use std::{thread};
-use std::time::{Duration};
 
 use cpal::{StreamConfig, Device};
 use cpal::traits::{DeviceTrait, StreamTrait};
@@ -48,6 +44,10 @@ pub fn write_to_stream<T: cpal::SizedSample + Send + std::fmt::Display + 'static
 
     // play the stream
     stream.play().unwrap();
-    thread::sleep(Duration::from_millis(60000));
+
+    // control loop so thread runs until main exits
+    loop {
+        // will add more control logic using channels here
+    }
     Ok(true)
 }
