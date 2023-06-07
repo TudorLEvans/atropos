@@ -1,42 +1,38 @@
-use clap::{Parser, Subcommand};
+use clap::{Parser, Subcommand, Args};
 
-pub struct Metronome {
-    pub bar_length: u32,
-    pub sub_divisions: u32,
-    pub tempo: u32,
-    pub use_bell: bool,
-    pub use_sub: bool
-}
 
 #[derive(Parser, Debug)]
-#[command(author = "Tudor Evans", version, about, long_about = None)]
-struct Args {
+#[command(author = "Tudor Evans", version = "0.1.0", about = "Rust implementation of a basic metronome", long_about = None)]
+pub struct Arguments {
     #[clap(subcommand)]
-    cmd: SubCommand,
+    pub cmd: Commands,
 }
 
 #[derive(Subcommand, Debug)]
-enum SubCommand {
-    Met {
-        #[clap()]
-        bar_length: u32,
-        #[clap()]
-        sub_divisions: u32,
-        // #[clap(validator = validate_tempo, default_value_t = 100)]
-        tempo: u32,
-        #[clap(short, long, default_value_t = true)]
-        use_bell: bool,
-        #[clap(short, long, default_value_t = false)]
-        use_sub: bool
-    }
+pub enum Commands {
+    Met(Metronome)
 }
 
-fn validate_tempo(tempo: &u32) -> Result<(), String> {
-    if *tempo < 1 {
-        Err(String::from(
-            "Tempo must be a positive integer",
-        ))
+
+#[derive(Args, Debug)]
+pub struct Metronome {
+    #[arg(short, long, default_value_t = 4)]
+    pub bar_length: u32,
+    #[arg(short, long, default_value_t = 1)]
+    pub sub_divisions: u32,
+    #[arg(short, long, default_value_t = 100, value_parser = validate_tempo)]
+    pub tempo: u32,
+    #[arg(short, long, default_value_t = false)]
+    pub use_bell: bool
+}
+
+fn validate_tempo(s: &str) -> Result<u32, String> {
+    let tempo: u32 = s
+        .parse()
+        .map_err(|_| format!("`{s}` isn't a valid number"))?;
+    if tempo > 0 {
+        Ok(tempo)
     } else {
-        Ok(())
+        Err(String::from("Tempo must be greater than 0"))
     }
 }

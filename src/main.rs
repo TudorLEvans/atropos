@@ -6,12 +6,27 @@ use cpal::{SampleFormat, StreamConfig};
 use cpal::traits::{DeviceTrait, HostTrait};
 use ringbuf::{HeapRb};
 
+use clap::{Parser};
+
 mod synthesis;
 mod player;
 mod cli;
 
 
 fn main() {
+
+    let cli = cli::Arguments::parse();
+
+    // Note: seems redundant but will be useful when adding more commands
+    match cli.cmd {
+        cli::Commands::Met(met) => {
+            process_met(met)
+        }
+    }
+}
+
+fn process_met(met: cli::Metronome) {
+
     // define the host
     let host = cpal::default_host();
 
@@ -47,14 +62,6 @@ fn main() {
         println!("exited thread");
     });
 
-    let met = cli::Metronome {
-        bar_length: 4,
-        sub_divisions: 2,
-        tempo: 100,
-        use_bell: true,
-        use_sub: true
-    };
-
     // create a (non-threadable) buffer for storing the FIFO list of notes currently playing
     let mut notes = VecDeque::new();
 
@@ -77,7 +84,7 @@ fn main() {
             } else if age % ( sample_rate * 60 / met.tempo) == 0 {
                 notes.push_back(synthesis::oscillator::build_oscillator(600));
             // play subdivision sound if on subdivision and not on beat and sound enabled
-            } else if met.use_sub && age % ( sample_rate * 60 / ( met.tempo * met.sub_divisions )) == 0 {
+            } else if age % ( sample_rate * 60 / ( met.tempo * met.sub_divisions )) == 0 {
                 notes.push_back(synthesis::oscillator::build_oscillator(440));
             };
 
