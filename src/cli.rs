@@ -13,7 +13,6 @@ pub enum Commands {
     Met(Metronome)
 }
 
-
 #[derive(Args, Debug)]
 pub struct Metronome {
     #[arg(short, long, default_value_t = 4)]
@@ -22,8 +21,10 @@ pub struct Metronome {
     pub sub_divisions: u32,
     #[arg(short, long, default_value_t = 100, value_parser = validate_tempo)]
     pub tempo: u32,
-    #[arg(short, long, default_value_t = false)]
-    pub use_bell: bool
+    #[arg(long, default_value_t = false)]
+    pub bell: bool,
+    #[arg(long, num_args = 1.., value_delimiter = ',')]
+    pub seq: Vec<String>
 }
 
 fn validate_tempo(s: &str) -> Result<u32, String> {

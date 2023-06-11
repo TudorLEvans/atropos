@@ -14,10 +14,8 @@ mod cli;
 
 
 fn main() {
-
     let cli = cli::Arguments::parse();
 
-    // Note: seems redundant but will be useful when adding more commands
     match cli.cmd {
         cli::Commands::Met(met) => {
             process_met(met)
@@ -65,28 +63,34 @@ fn process_met(met: cli::Metronome) {
     // create a (non-threadable) buffer for storing the FIFO list of notes currently playing
     let mut notes = VecDeque::new();
 
+    let sequence = player::generate_sequence(sample_rate, &met);
+    println!("{:?}", sequence);
+
     // calculate the ring buffer input for the sound wave
     // only write when the buffer is not full
     let mut s: f32;
     let mut age: u32 = 0;
+    let mut index: usize = 0;
+    let mut reset: bool = false;
     loop {
         if prod.is_full() {
             thread::sleep(Duration::from_millis(1));
         } else {
             s = 0.0;
 
-            // check which type of note to play
-
-            // play bell if at start of bar and enabled
-            if met.use_bell && age % ( met.bar_length * sample_rate * 60 / ( met.tempo )) == 0 {
-                notes.push_back(synthesis::oscillator::build_oscillator(700));
-            // play note if on the beat and it's not a bell
-            } else if age % ( sample_rate * 60 / met.tempo) == 0 {
-                notes.push_back(synthesis::oscillator::build_oscillator(600));
-            // play subdivision sound if on subdivision and not on beat and sound enabled
-            } else if age % ( sample_rate * 60 / ( met.tempo * met.sub_divisions )) == 0 {
-                notes.push_back(synthesis::oscillator::build_oscillator(440));
-            };
+            // check which type of note to play and push on stack
+            if sequence[index].age == age {
+                if sequence[index].note == 0 && met.bell {
+                    notes.push_back(synthesis::oscillator::build_oscillator(700));
+                } else if sequence[index].note < 2 && sequence[index].note >= 0  {
+                    notes.push_back(synthesis::oscillator::build_oscillator(600));
+                } else if sequence[index].note == 2 {
+                    notes.push_back(synthesis::oscillator::build_oscillator(440));
+                } else {
+                    reset = true;
+                }
+                index = ( index + 1 ) % sequence.len();
+            }
 
             match notes.front() {
                 Some(x) => {
@@ -99,7 +103,7 @@ fn process_met(met: cli::Metronome) {
             for note in notes.iter_mut() {
                 s = s + note.iterate_wave::<f32>(sample_rate);
             }
-            // dangerous - FIX!
+
             if notes.len() != 0 {
                 s = s / notes.len() as f32;
             } else {
@@ -110,8 +114,9 @@ fn process_met(met: cli::Metronome) {
             age = age + 1;
 
             // reset age after each bar completes
-            if age == sample_rate * met.bar_length * (60 / met.tempo) {
-                age = 0
+            if reset {
+                age = 0;
+                reset = false;
             }
         }
     }
